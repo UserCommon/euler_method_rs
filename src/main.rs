@@ -9,7 +9,7 @@ use plotters::prelude::*;
 // rhs y' = RHS
 // for numerical
 fn derivative(x: f64, y: f64) -> f64 {
-    (3. *y / 4.) - (x.powf(2.) / (4. * y))
+    ((3. * y) / (4. * x)) - (x / (4. * y))
 }
 
 // y(x) = sqrt(-x^2 + c_1*x^(3/2))
@@ -48,33 +48,35 @@ fn solve_ivp<F1, F2>(f: &F1, x_span: (f64, f64), y_0: f64, h: f64, solver: &F2) 
     // let xs = ((x_span.0)..=(x_span.1)).map(|x| x as f64 * h);
     // let xs_cpy: Vec<f64> = xs.clone().collect();
     let mut xs = vec![];
-    let mut v = vec![y_0];
 
     let mut cnt: f64 = x_span.0;
-    while cnt <= x_span.1 {
+    while cnt < x_span.1 {
         xs.push(cnt);
         cnt += h;
     }
     xs.push(cnt);
 
+    let mut ys = vec![0.; xs.len()];
+    ys[0] = y_0;
 
-    for x in &xs {
-        let r = solver(f, *x, *v.last().unwrap(), h);
-        v.push(r);
+    for i in 0..xs.len() - 1 {
+        ys[i + 1] = solver(f, xs[i], ys[i], h);
     }
 
-    (v, xs)
+
+    (ys, xs)
 }
 
 
 fn main() -> Result<(), Box<dyn std::error::Error>>{
-    const STEP: f64 = 0.001;
+    const STEP: f64 = 0.25;
+    let name = format!("plots/{}.png", STEP.to_string().replace(".", "_"));
     // Euler's values
     let (ys_e, xs_e) = solve_ivp(&derivative, (1.0, 2.0), 1., STEP, &euler);
     // Analytical values
-    let (ys_a, xs_a) = solve_ivp(&by_hand, (1.0, 2.0), 1., STEP, &analytic);
+    let (ys_a, xs_a) = solve_ivp(&by_hand, (1.0, 2.0), 1., 0.001, &analytic);
 
-    let root = BitMapBackend::new("plots/1.png", (1024, 768)).into_drawing_area();
+    let root = BitMapBackend::new(&name, (1024, 768)).into_drawing_area();
     root.fill(&WHITE)?;
     let mut chart = ChartBuilder::on(&root)
         .caption("Euler's method and Analytical", ("sans-serif", 50).into_font())
@@ -112,8 +114,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
 
       root.present()?;
 
-    // println!("Analytical: {:?}, {:?}", xs_a, ys_a);
-    // println!("Euler: {:?}, {:?}", xs_e, ys_e);
     println!("Analytical: {}", ys_a.last().unwrap());
     println!("Euler: {}", ys_e.last().unwrap());
 
