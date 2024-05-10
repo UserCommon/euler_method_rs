@@ -1,12 +1,12 @@
 use plotters::prelude::*;
+use std::io;
+const A: f64 = 1.0;
+const B: f64 = 2.0;
+
+
 // 4xyy' - 3y^2 + x^2 = 0
 // =>
-// y' = (3y/4) - (x^2)/4(y)
-//
-// y(1) = 1
-// x \in [1;2]
-
-// rhs y' = RHS
+// y' = ...
 // for numerical
 fn derivative(x: f64, y: f64) -> f64 {
     ((3. * y) / (4. * x)) - (x / (4. * y))
@@ -14,8 +14,21 @@ fn derivative(x: f64, y: f64) -> f64 {
 
 // y(x) = sqrt(-x^2 + c_1*x^(3/2))
 // where c_1 = 2
-fn by_hand(x: f64, y: f64) -> f64 {
-    (-(x.powf(2.)) + 2.*x.powf(3./2.)).sqrt()
+fn by_hand(x: f64) -> f64 {
+    (-x.powf(2.) + 2.*x.powf(3./2.)).sqrt()
+}
+
+fn span_gen(span: (f64, f64), h: f64) -> Vec<f64> {
+    let mut l_span = vec![];
+
+    let mut cnt: f64 = span.0;
+    while cnt <= span.1 {
+        l_span.push(cnt);
+        cnt += h;
+    }
+    l_span.push(cnt);
+
+    l_span
 }
 
 // Just analytic
@@ -26,7 +39,6 @@ where F:
     f(x_n, y_n)
 }
 
-
 // Euler's method
 fn euler<F>(f: &F, x_n: f64, y_n: f64, h: f64) -> f64
 where F:
@@ -35,46 +47,76 @@ where F:
     y_n + h * f(x_n, y_n)
 }
 
-
-// consider is something like 0.01 (1.0 -> 1.01 -> 1.02 -> ...)
-// WHY X_SPAN is (i32, i32)?
-// It's all beacuse of float vals arithmetic which not allowing provide
-// nice api for this
-fn solve_ivp<F1, F2>(f: &F1, x_span: (f64, f64), y_0: f64, h: f64, solver: &F2) -> (Vec<f64>, Vec<f64>)
-    where
-    F1: Fn(f64, f64) -> f64,
-    F2: Fn(&F1, f64, f64, f64) -> f64,
+/// F1 is a function itself
+/// F2 is a solver function which applies F1
+trait Solver<F1, F2>
+where
 {
-    // let xs = ((x_span.0)..=(x_span.1)).map(|x| x as f64 * h);
-    // let xs_cpy: Vec<f64> = xs.clone().collect();
-    let mut xs = vec![];
+    fn solve(f: &F1, xs: &Vec<f64>, y_0: f64, solver: &F2, h: f64) -> Vec<f64>;
+}
 
-    let mut cnt: f64 = x_span.0;
-    while cnt < x_span.1 {
-        xs.push(cnt);
-        cnt += h;
+struct NumericalSolver;
+
+impl<F1, F2> Solver<F1, F2> for NumericalSolver
+where F1: Fn(f64, f64) -> f64,
+      F2: Fn(&F1, f64, f64, f64) -> f64
+{
+    fn solve(f: &F1, xs: &Vec<f64>, y_0: f64, solver: &F2, h: f64) -> Vec<f64> {
+        let mut ys = vec![0.; xs.len()];
+        ys[0] = y_0;
+
+        for i in 0..xs.len() - 1 {
+            ys[i + 1] = solver(f, xs[i], ys[i], h);
+        }
+
+        ys
     }
-    xs.push(cnt);
+}
 
-    let mut ys = vec![0.; xs.len()];
-    ys[0] = y_0;
+struct AnalyticalSolver;
 
-    for i in 0..xs.len() - 1 {
-        ys[i + 1] = solver(f, xs[i], ys[i], h);
+impl<F1> Solver<F1, ()> for AnalyticalSolver
+where F1: Fn(f64) -> f64
+{
+    fn solve(f: &F1, xs: &Vec<f64>, _y_0: f64, _solver: &(), _h: f64) -> Vec<f64> {
+        let mut ys = vec![0.; xs.len()];
+
+        for i in 0..xs.len() {
+            ys[i] = f(xs[i]);
+        }
+
+        ys
     }
-
-
-    (ys, xs)
 }
 
 
-fn main() -> Result<(), Box<dyn std::error::Error>>{
-    const STEP: f64 = 0.25;
-    let name = format!("plots/{}.png", STEP.to_string().replace(".", "_"));
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    println!("Please enter a step size:");
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)
+        .expect("Failed to read line");
+
+    let number: i32 = input.trim().parse()
+        .expect("Please enter a valid number");
+
+    let step: f64 = (B - A) / (number as f64);
+
+
+    let xs = span_gen((A, B), step);
+    let xs_exact = span_gen((A, B), 0.05);
+
     // Euler's values
-    let (ys_e, xs_e) = solve_ivp(&derivative, (1.0, 2.0), 1., STEP, &euler);
+    let ys_e = NumericalSolver::solve(&derivative, &xs, 1., &euler, step);
+
     // Analytical values
-    let (ys_a, xs_a) = solve_ivp(&by_hand, (1.0, 2.0), 1., 0.001, &analytic);
+    let ys_a = AnalyticalSolver::solve(&by_hand, &xs, 1., &(), step);
+
+    // Exact Analytical
+    let ys_aex = AnalyticalSolver::solve(&by_hand, &xs_exact, 1., &(), 0.05);
+
+    let name = format!("plots/{}.png", number.to_string().replace(".", "_"));
+
+
 
     let root = BitMapBackend::new(&name, (1024, 768)).into_drawing_area();
     root.fill(&WHITE)?;
@@ -83,14 +125,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
         .margin(5)
         .x_label_area_size(35)
         .y_label_area_size(40)
-        .build_cartesian_2d(1f64..2f64, 0f64..3f64)?;
+        .build_cartesian_2d(A..B, 1f64..1.5)?;
 
     chart.configure_mesh().draw()?;
 
     // Euler's graph
     chart
         .draw_series(LineSeries::new(
-            xs_e.iter().zip(ys_e.iter()).map(|(&x, &y)| (x, y)),
+            xs.iter().zip(ys_e.iter()).map(|(&x, &y)| (x, y)),
             &RED
         ))?
         .label("Euler's aproximation")
@@ -99,7 +141,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
     // Analytical graph
     chart
         .draw_series(LineSeries::new(
-            xs_a.iter().zip(ys_a.iter()).map(|(&x, &y)| (x, y)),
+            xs_exact.iter().zip(ys_aex.iter()).map(|(&x, &y)| (x, y)),
             &BLUE
         ))?
         .label("Analytical solution")
@@ -114,8 +156,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
 
       root.present()?;
 
-    println!("Analytical: {}", ys_a.last().unwrap());
-    println!("Euler: {}", ys_e.last().unwrap());
+    let e = ys_e.last().unwrap();
+    let a = ys_a.last().unwrap();
+    println!("Analytical: {}", a);
+    println!("Euler: {}", e);
+    // Problem with max_error!
+    let mx_error = ys_e.iter().zip(ys_a.iter())
+                              .map(|(&x, &y)| f64::abs(x - y))
+                              .max_by(|a, b| a.partial_cmp(b).unwrap() )
+                              .expect("Something went wrong with finding maximum error");
+
+    println!("Max error: {}", mx_error);
+
+    // println!("{:?}", (ys_e, &xs));
+    // println!("{:?}", (ys_a, &xs));
+    // println!("{:?}", (ys_aex, &xs_exact));
 
     Ok(())
 }
