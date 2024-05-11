@@ -125,7 +125,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .margin(5)
         .x_label_area_size(35)
         .y_label_area_size(40)
-        .build_cartesian_2d(A..B, 1f64..1.5)?;
+        .build_cartesian_2d(A..B, -2f64..2f64)?;
 
     chart.configure_mesh().draw()?;
 
@@ -138,6 +138,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .label("Euler's aproximation")
         .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
 
+    chart
+        .draw_series(LineSeries::new(
+            xs.iter().zip(ys_e.iter().map(|y| -y)).map(|(&x, y)| (x, y)),
+            &RED
+        ))?;
+
+
     // Analytical graph
     chart
         .draw_series(LineSeries::new(
@@ -146,6 +153,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ))?
         .label("Analytical solution")
         .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLUE));
+    chart
+        .draw_series(LineSeries::new(
+            xs_exact.iter().zip(ys_aex.iter().map(|y| -y)).map(|(&x, y)| (x, y)),
+            &BLUE
+        ))?;
+
 
 
     chart
