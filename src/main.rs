@@ -31,14 +31,6 @@ fn span_gen(span: (f64, f64), h: f64) -> Vec<f64> {
     l_span
 }
 
-// Just analytic
-fn analytic<F>(f: &F, x_n: f64, y_n: f64, _h: f64) -> f64
-where F:
-    Fn(f64, f64) -> f64
-{
-    f(x_n, y_n)
-}
-
 // Euler's method
 fn euler<F>(f: &F, x_n: f64, y_n: f64, h: f64) -> f64
 where F:
@@ -50,7 +42,6 @@ where F:
 /// F1 is a function itself
 /// F2 is a solver function which applies F1
 trait Solver<F1, F2>
-where
 {
     fn solve(f: &F1, xs: &Vec<f64>, y_0: f64, solver: &F2, h: f64) -> Vec<f64>;
 }
@@ -169,10 +160,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
       root.present()?;
 
-    let e = ys_e.last().unwrap();
-    let a = ys_a.last().unwrap();
-    println!("Analytical: {}", a);
-    println!("Euler: {}", e);
     // Problem with max_error!
     let mx_error = ys_e.iter().zip(ys_a.iter())
                               .map(|(&x, &y)| f64::abs(x - y))
@@ -180,10 +167,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                               .expect("Something went wrong with finding maximum error");
 
     println!("Max error: {}", mx_error);
-
-    // println!("{:?}", (ys_e, &xs));
-    // println!("{:?}", (ys_a, &xs));
-    // println!("{:?}", (ys_aex, &xs_exact));
 
     Ok(())
 }
