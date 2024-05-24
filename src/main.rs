@@ -1,4 +1,8 @@
-use plotters::prelude::*;
+use plotly::{
+    common::{Mode, Line, DashType},
+    layout::{Axis, Layout},
+    Plot, Scatter
+};
 use std::io;
 const A: f64 = 1.0;
 const B: f64 = 2.0;
@@ -18,17 +22,17 @@ fn by_hand(x: f64) -> f64 {
     (-x.powf(2.) + 2.*x.powf(3./2.)).sqrt()
 }
 
+// Generate range
 fn span_gen(span: (f64, f64), h: f64) -> Vec<f64> {
-    let mut l_span = vec![];
+  let mut l_span = vec![];
+  let mut cnt: f64 = span.0;
+  let tolerance = 1e-6; // Adjust tolerance as needed
 
-    let mut cnt: f64 = span.0;
-    while cnt <= span.1 {
-        l_span.push(cnt);
-        cnt += h;
-    }
+  while cnt < span.1 + tolerance {
     l_span.push(cnt);
-
-    l_span
+    cnt += h;
+  }
+  l_span
 }
 
 // Euler's method
@@ -95,6 +99,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let xs = span_gen((A, B), step);
     let xs_exact = span_gen((A, B), 0.05);
+    // println!("xs_e: {:#?}", xs_exact);
 
     // Euler's values
     let ys_e = NumericalSolver::solve(&derivative, &xs, 1., &euler, step);
@@ -105,62 +110,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Exact Analytical
     let ys_aex = AnalyticalSolver::solve(&by_hand, &xs_exact, 1., &(), 0.05);
 
-    let name = format!("plots/{}.png", number.to_string().replace(".", "_"));
+    let mut plot = Plot::new();
+    let trace_euler = Scatter::new(xs.clone(), ys_e.clone())
+        .mode(Mode::LinesMarkers)
+        .line(Line::new().dash(DashType::Dash))
+        .name("Euler's method");
 
+    let trace_analytical = Scatter::new(xs_exact.clone(), ys_aex.clone())
+        .mode(Mode::Lines)
+        .name("Analitycal method");
 
+    let layout = Layout::new()
+        .title("Euler's aproximation".into())
+        .x_axis(Axis::new().title("x".into()).range(vec![0., 2.1]))
+        .y_axis(Axis::new().title("y".into()).range(vec![0.9, 2.]))
+        .height(600)
+        .width(1200);
 
-    let root = BitMapBackend::new(&name, (1024, 768)).into_drawing_area();
-    root.fill(&WHITE)?;
-    let mut chart = ChartBuilder::on(&root)
-        .caption("Euler's method and Analytical", ("sans-serif", 50).into_font())
-        .margin(5)
-        .x_label_area_size(35)
-        .y_label_area_size(40)
-        .build_cartesian_2d(A..B, -2f64..2f64)?;
+    plot.set_layout(layout);
+    plot.add_trace(trace_euler);
+    plot.add_trace(trace_analytical);
 
-    chart.configure_mesh().draw()?;
+    plot.show();
 
-    // Euler's graph
-    chart
-        .draw_series(LineSeries::new(
-            xs.iter().zip(ys_e.iter()).map(|(&x, &y)| (x, y)),
-            &RED
-        ))?
-        .label("Euler's aproximation")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
-
-    chart
-        .draw_series(LineSeries::new(
-            xs.iter().zip(ys_e.iter().map(|y| -y)).map(|(&x, y)| (x, y)),
-            &RED
-        ))?;
-
-
-    // Analytical graph
-    chart
-        .draw_series(LineSeries::new(
-            xs_exact.iter().zip(ys_aex.iter()).map(|(&x, &y)| (x, y)),
-            &BLUE
-        ))?
-        .label("Analytical solution")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLUE));
-    chart
-        .draw_series(LineSeries::new(
-            xs_exact.iter().zip(ys_aex.iter().map(|y| -y)).map(|(&x, y)| (x, y)),
-            &BLUE
-        ))?;
-
-
-
-    chart
-        .configure_series_labels()
-        .background_style(&WHITE.mix(0.8))
-        .border_style(&BLACK)
-        .draw()?;
-
-      root.present()?;
-
-    // Problem with max_error!
     let mx_error = ys_e.iter().zip(ys_a.iter())
                               .map(|(&x, &y)| f64::abs(x - y))
                               .max_by(|a, b| a.partial_cmp(b).unwrap() )
