@@ -131,6 +131,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     plot.add_trace(trace_euler);
     plot.add_trace(trace_analytical);
 
+    // plot.write_html("graph.html");
     plot.show();
 
     let mx_error = ys_e.iter().zip(ys_a.iter())
